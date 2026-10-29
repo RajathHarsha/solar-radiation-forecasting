@@ -10,6 +10,12 @@ For Bengaluru, SARIMAX lowered the MAE by only about 1.5% compared with SARIMA, 
 
 The radiation values are NASA POWER satellite and reanalysis estimates, not ground-station readings.
 
+## Live dashboard
+
+https://rajathharsha.github.io/solar-radiation-forecasting/
+
+(Served by GitHub Pages from the main branch. It needs internet to load the chart libraries.)
+
 ## What to open
 
 - `dashboard.html`: an interactive dashboard. Double-click it to open in a browser. It needs internet only to load the chart libraries. Pick a city at the top and every section updates.
