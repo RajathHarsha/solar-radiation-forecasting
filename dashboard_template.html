@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar Irradiance Forecasting</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js" charset="utf-8"></script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0a0a1a; --glass:rgba(255,255,255,.05); --glass2:rgba(255,255,255,.08); --line:rgba(255,255,255,.10);
+  --ink:#f5f5ff; --ink2:#cbd5e1; --mute:#8b93a7;
+  --navbg:rgba(10,10,26,.78); --tipbg:#14142b; --eqbg:rgba(0,0,0,.35); --eqink:#d6e3ff; --glow-a:.30; --glow-b:.20; --glow-c:.16;
+  --blue:#00d4ff; --purple:#a78bfa; --purple-deep:#7c3aed; --green:#10b981; --amber:#f59e0b; --grey:#94a3b8; --red:#f43f5e;
+}
+:root[data-skin="light"]{color-scheme:light;--bg:#f2f4fb;--glass:rgba(255,255,255,.78);--glass2:rgba(255,255,255,.96);--line:rgba(25,35,80,.16);
+  --ink:#141a33;--ink2:#2c3659;--mute:#55608a;--blue:#0369a1;--purple:#6d28d9;--purple-deep:#5b21b6;--green:#047857;--amber:#b45309;--grey:#64748b;--red:#be123c;
+  --navbg:rgba(242,244,251,.88);--tipbg:#fff;--eqbg:#e9edfa;--eqink:#1e2a5a;--glow-a:.12;--glow-b:.10;--glow-c:.08}
+:root[data-skin="light"] .badge.ok{color:#065f46}:root[data-skin="light"] .badge.no{color:#9f1239}:root[data-skin="light"] .badge.tie{color:#92400e}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-size:16px;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.55;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--bg)}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+  radial-gradient(900px 500px at 12% -5%,rgba(124,58,237,var(--glow-a)),transparent 60%),
+  radial-gradient(800px 500px at 100% 10%,rgba(0,212,255,var(--glow-b)),transparent 55%),
+  radial-gradient(700px 500px at 50% 110%,rgba(16,185,129,var(--glow-c)),transparent 60%),var(--bg)}
+a{color:var(--blue)}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+section{padding-block:54px 8px}
+h2{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
+h2 .n{color:var(--blue);font-weight:700;margin-right:10px}
+.lead{color:var(--ink2);max-width:860px;margin:0 0 22px}
+.glass{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:18px;padding:20px 22px}
+.glass h3{margin:0 0 4px;font-size:16px}
+.sub{color:var(--mute);font-size:13px;margin-bottom:10px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+@media(max-width:480px){.g2{grid-template-columns:1fr}}
+@keyframes rise{from{opacity:.35;transform:translateY(16px)}to{opacity:1;transform:none}}
+.reveal.in{animation:rise .8s ease both}
+.note{display:block;margin-top:10px;padding:10px 14px;border-left:3px solid var(--blue);background:rgba(0,212,255,.07);border-radius:8px;color:var(--ink2);font-size:13.5px}
+.note b{color:var(--ink)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:13px;border:1px solid var(--line);background:var(--glass);color:var(--ink2)}
+.pill b{color:var(--ink)}
+/* top nav + city selector */
+nav.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:var(--navbg);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+nav.top .links{display:flex;gap:4px;flex-wrap:wrap}
+nav.top a{color:var(--ink2);text-decoration:none;padding:6px 11px;border-radius:9px;font-size:14px}
+nav.top a:hover{background:var(--glass2);color:var(--ink)}
+.cities{display:flex;gap:4px;background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:3px;flex-wrap:wrap}
+.cities button{border:0;background:none;color:var(--ink2);padding:6px 12px;border-radius:9px;cursor:pointer;font-size:13.5px;font-family:inherit}
+.cities button.on{background:linear-gradient(135deg,var(--purple-deep),#2563eb);color:#fff;box-shadow:0 0 14px rgba(124,58,237,.5)}
+.cities-lbl{color:var(--mute);font-size:12px;margin-right:2px}
+/* hero */
+.hero{padding-block:46px 14px;position:relative}
+.hero h1{font-size:clamp(34px,6vw,64px);margin:0 0 12px;letter-spacing:-.03em;line-height:1.12;padding-bottom:.06em;background:linear-gradient(90deg,var(--ink),var(--blue) 45%,var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 22px rgba(0,212,255,.35));animation:glow 4s ease-in-out infinite alternate}
+@keyframes glow{from{filter:drop-shadow(0 0 14px rgba(0,212,255,.25))}to{filter:drop-shadow(0 0 30px rgba(124,58,237,.55))}}
+.sun{position:absolute;right:18px;top:18px;width:150px;height:150px;opacity:.95}
+.sun .rays{transform-origin:75px 75px;animation:spin 28s linear infinite}
+.sun .core{animation:pulse 3s ease-in-out infinite;transform-origin:75px 75px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{transform:scale(1.07)}}
+@media(max-width:700px){.sun{width:84px;height:84px;opacity:.7}}
+.kpi .v{font-size:42px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.kpi .l{color:var(--mute);font-size:13px;margin-top:4px}
+.kpi .d{color:var(--ink2);font-size:12.5px;margin-top:2px}
+.kpi.b .v{color:var(--blue)}.kpi.p .v{color:var(--purple)}.kpi.g .v{color:var(--green)}.kpi.a .v{color:var(--amber)}
+.short{margin-top:16px;border:1px solid rgba(0,212,255,.35);background:linear-gradient(135deg,rgba(0,212,255,.10),rgba(124,58,237,.10))}
+.short .big{font-size:21px;font-weight:600;line-height:1.4}
+/* concept cards */
+.ccards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.ccard{cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);transition:transform .2s,box-shadow .2s,border-color .2s}
+.ccard:hover{transform:translateY(-3px);border-color:rgba(0,212,255,.5)}
+.ccard.on{border-color:var(--blue);box-shadow:0 0 22px rgba(0,212,255,.28)}
+.ccard .ic{font-size:26px}
+.ccard .t{font-weight:600;margin-top:4px}
+.ccard .s{color:var(--mute);font-size:12.5px}
+.cpanel{display:none}.cpanel.on{display:block;animation:fade .45s ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+svg text{font-family:inherit}
+.draw{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.4s ease forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.blocks{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.blk{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--glass2);min-width:96px;text-align:center}
+.blk .k{font-size:22px;font-weight:700}
+.blk .e{color:var(--mute);font-size:12px}
+.blk.p .k{color:var(--purple)}.blk.d .k{color:var(--blue)}.blk.q .k{color:var(--green)}.blk.m .k{color:var(--amber)}
+.eq{font-family:ui-monospace,Consolas,monospace;background:var(--eqbg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--eqink);overflow-x:auto;font-size:13.5px}
+.btn{border:1px solid var(--line);background:var(--glass2);color:var(--ink);padding:8px 14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px}
+.btn:hover{border-color:var(--blue)}
+.btn.pri{background:linear-gradient(135deg,var(--purple-deep),#2563eb);border:0;box-shadow:0 0 16px rgba(124,58,237,.45)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:9px;font-weight:600;font-size:13.5px}
+.badge.ok{background:rgba(16,185,129,.16);color:#6ee7b7;border:1px solid rgba(16,185,129,.4)}
+.badge.no{background:rgba(244,63,94,.16);color:#fda4af;border:1px solid rgba(244,63,94,.4)}
+.badge.tie{background:rgba(245,158,11,.14);color:#fcd34d;border:1px solid rgba(245,158,11,.4)}
+.tipw{position:relative;display:inline-block;border-bottom:1px dotted var(--mute);cursor:help}
+.tipw .tip{max-width:80vw;visibility:hidden;opacity:0;position:absolute;left:0;bottom:130%;width:280px;background:var(--tipbg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--ink2);z-index:10;transition:opacity .2s}
+.tipw:hover .tip,.tipw:focus .tip{visibility:visible;opacity:1}
+.tl{border-left:2px solid var(--line);margin-left:8px;padding-left:18px}
+.tl .it{position:relative;margin:0 0 16px}
+.tl .it:before{content:"";position:absolute;left:-26px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--blue);box-shadow:0 0 10px var(--blue)}
+.tl .it.w:before{background:var(--green);box-shadow:0 0 10px var(--green)}
+.tl .y{color:var(--blue);font-weight:700}
+.tl .miss{color:var(--ink2);font-size:13.5px}
+.tl .vf{font-size:12px;color:var(--amber)}
+.gapbox{border:1px solid rgba(124,58,237,.55);background:linear-gradient(135deg,rgba(124,58,237,.16),rgba(0,212,255,.06))}
+.did{border:1px solid rgba(16,185,129,.55);background:linear-gradient(135deg,rgba(16,185,129,.16),rgba(0,212,255,.04))}
+.tag{display:inline-block;background:linear-gradient(135deg,var(--purple-deep),#2563eb);padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:8px}
+/* toggles */
+.tg{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.tg label{display:inline-flex;gap:6px;align-items:center;cursor:pointer;padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--glass);font-size:13.5px;color:var(--ink2)}
+.tg input{accent-color:var(--blue)}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:var(--glass);color:var(--ink2);padding:9px 16px;border-radius:12px;cursor:pointer;font-family:inherit;font-size:14px}
+.tabs button.on{background:linear-gradient(135deg,var(--purple-deep),#2563eb);color:#fff;border-color:transparent;box-shadow:0 0 16px rgba(124,58,237,.45)}
+.pane{display:none}.pane.on{display:block;animation:fade .4s ease}
+.plot{width:100%;min-height:340px}
+.plot.s{min-height:230px}
+.stars{color:var(--amber);letter-spacing:2px}
+.stars .off{color:#3a3f55}
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.spec div{background:var(--glass2);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.spec .k{color:var(--mute);font-size:12px}.spec .v{font-weight:600}
+.mc{border-radius:16px;padding:16px 18px;border:1px solid var(--line);background:var(--glass)}
+.mc.good{border-color:rgba(16,185,129,.55);box-shadow:inset 0 0 0 1px rgba(16,185,129,.2)}
+.mc.bad{border-color:rgba(244,63,94,.55);box-shadow:inset 0 0 0 1px rgba(244,63,94,.2)}
+.mc .t{color:var(--mute);font-size:13px}.mc .num{font-size:30px;font-weight:700}
+.mc .row{display:flex;justify-content:space-between;color:var(--ink2);font-size:13.5px;margin-top:4px}
+.winner{text-align:center;padding:26px;border:1px solid rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(124,58,237,.12))}
+.winner .w{font-size:30px;font-weight:800;letter-spacing:-.01em}
+canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:99}
+/* simulator */
+.ctl{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+input[type=range]{accent-color:var(--blue);width:min(340px,100%)}
+input[type=number]{background:var(--glass2);border:1px solid var(--line);color:var(--ink);padding:8px 10px;border-radius:10px;font-size:16px;width:110px;font-family:inherit}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+th{color:var(--mute);font-weight:500}
+td:first-child,th:first-child{text-align:left}
+tr.sel td{background:rgba(0,212,255,.08)}
+tr.clk{cursor:pointer}tr.clk:hover td{background:var(--glass2)}
+.price{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.pc{position:relative;border-radius:20px;padding:24px 22px;border:1px solid var(--line);background:var(--glass)}
+.pc.best{border-color:var(--green);box-shadow:0 0 28px rgba(16,185,129,.25);transform:translateY(-4px)}
+.ribbon{position:absolute;top:-12px;right:18px;background:var(--green);color:#04130d;font-weight:700;font-size:12px;padding:4px 10px;border-radius:999px}
+.pc h4{margin:0;font-size:18px}.pc .mape{font-size:40px;font-weight:800;margin:6px 0}
+.bar{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin:3px 0 10px}
+.bar i{display:block;height:100%;border-radius:999px;width:0;transition:width 1.2s cubic-bezier(.2,.8,.2,1)}
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch}
+.flow .arrow{align-self:center;color:var(--blue);font-size:26px}
+@media(max-width:820px){.flow{grid-template-columns:1fr}.flow .arrow{transform:rotate(90deg);text-align:center}}
+.idea{cursor:pointer;transition:transform .2s,border-color .2s}
+.idea:hover{transform:translateY(-3px);border-color:var(--purple)}
+.idea .more{display:none;margin-top:8px;color:var(--ink2);font-size:13.5px}
+.idea.open .more{display:block}
+details{background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:600}
+details p,details li{color:var(--ink2);font-size:14px}
+dl.gl{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px}
+dl.gl dt{font-weight:600}dl.gl dd{margin:0;color:var(--ink2)}
+footer{padding-block:40px 60px;color:var(--mute);font-size:13px;text-align:center}
+.cmpbig{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.draw{stroke-dashoffset:0}}
+.links a.act{color:var(--ink);background:var(--glass2)}
+@keyframes flash{from{opacity:.25}to{opacity:1}}
+.flash{animation:flash .6s ease}
+.tscroll{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:12px;margin-top:12px}
+.tscroll table{min-width:560px}
+.tscroll thead th{position:sticky;top:0;background:var(--bg);z-index:2;text-align:right;white-space:nowrap}
+.tscroll thead th:first-child{text-align:left}
+.tscroll tr.tst td{background:rgba(124,58,237,.10)}
+.ds-stat .t{color:var(--mute);font-size:13px;margin-bottom:4px}.ds-stat .t .u{color:var(--mute)}
+.ds-stat .r{display:flex;justify-content:space-between;font-size:13.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.ds-stat .r b{color:var(--ink)}
+select{background:var(--glass2);border:1px solid var(--line);color:var(--ink);padding:7px 10px;border-radius:10px;font-size:14px;font-family:inherit}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+@media(max-width:700px){
+  nav.top .wrap{flex-direction:column;align-items:stretch;gap:8px}
+  nav.top .links{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  nav.top .links a{white-space:nowrap}
+  .cities{overflow-x:auto;flex-wrap:nowrap}.cities button{white-space:nowrap}
+  .kpi .v{font-size:32px}h2{font-size:24px}.glass{padding:16px}
+  .spec{grid-template-columns:repeat(2,1fr)}.plot{min-height:280px}
+  #themebtn{align-self:flex-start}
+}
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+
+<nav class="top">
+  <div class="wrap">
+    <div class="links">
+      <a href="#hero">Home</a><a href="#concepts">Learn</a><a href="#explorer">Data</a><a href="#lab">Model lab</a><a href="#cities">Cities</a><a href="#sim">Try it</a><a href="#results">Results</a><a href="#dataset">Dataset</a>
+    </div>
+    <div class="cities" id="citysel" role="tablist" aria-label="Choose a city"><span class="cities-lbl" style="align-self:center;padding-left:8px">City:</span></div>
+    <button class="btn sm" id="themebtn" aria-label="Switch between dark and light colours">Light mode</button>
+  </div>
+</nav>
+
+<header class="wrap hero" id="hero">
+  <svg class="sun" viewBox="0 0 150 150" aria-hidden="true">
+    <defs><radialGradient id="sg"><stop offset="0" stop-color="#fff7c2"/><stop offset=".55" stop-color="#ffb53d"/><stop offset="1" stop-color="#ff7a18"/></radialGradient></defs>
+    <g class="rays" stroke="#ffb53d" stroke-width="5" stroke-linecap="round">
+      <line x1="75" y1="6" x2="75" y2="22"/><line x1="75" y1="128" x2="75" y2="144"/><line x1="6" y1="75" x2="22" y2="75"/><line x1="128" y1="75" x2="144" y2="75"/>
+      <line x1="26" y1="26" x2="37" y2="37"/><line x1="113" y1="113" x2="124" y2="124"/><line x1="26" y1="124" x2="37" y2="113"/><line x1="113" y1="37" x2="124" y2="26"/>
+    </g>
+    <circle class="core" cx="75" cy="75" r="34" fill="url(#sg)"/>
+  </svg>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <span class="pill">Domain <b>Climate</b></span><span class="pill">Dataset <b>NASA POWER · 2000–2026</b></span><span class="pill">Models <b>SARIMA vs SARIMAX</b></span><span class="pill">Cities <b>5 in India</b></span>
+  </div>
+  <h1>Solar Irradiance Forecasting</h1>
+  <p class="lead">How much sunlight will reach the ground next week? This page builds forecasting models from 26 years of satellite records for five Indian cities, tests them on weeks they never saw, and lets you try it yourself. Pick a city above and everything updates.</p>
+  <div class="grid g4" id="kpis">
+    <div class="glass kpi b reveal"><div class="v" id="k1">0</div><div class="l">Daily records for this city</div><div class="d" id="k1d"></div></div>
+    <div class="glass kpi p reveal"><div class="v" id="k2" style="font-size:34px">–</div><div class="l">Training period</div><div class="d" id="k2d"></div></div>
+    <div class="glass kpi g reveal"><div class="v" id="k3">0</div><div class="l">Best model's average error (MAPE)</div><div class="d" id="k3d"></div></div>
+    <div class="glass kpi a reveal"><div class="v" id="k4">0</div><div class="l">Improvement from adding weather</div><div class="d" id="k4d"></div></div>
+  </div>
+  <div class="glass short reveal"><div class="tag">The short version</div><div class="big" id="short"></div><div style="color:var(--ink2);margin-top:6px" id="short2"></div></div>
+  <div style="color:var(--mute);font-size:12.5px;margin-top:10px">Results generated <b id="gen"></b> · you are viewing this at <b id="clock"></b></div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= SECTION 2: CONCEPTS ================= -->
+<section id="concepts" class="reveal">
+  <h2><span class="n">01</span>Learn the ideas (no maths needed)</h2>
+  <p class="lead">Click a card. Each one explains one idea in plain English, using this project's own data.</p>
+  <div class="ccards" id="ccards"></div>
+
+  <div class="cpanel glass on" id="cp0">
+    <h3>What is a time series?</h3>
+    <p style="color:var(--ink2)">A <b>time series</b> is just data collected over time, like the sunlight measured every week. It usually mixes three things: a slow <b style="color:var(--blue)">trend</b>, a repeating <b style="color:var(--purple)">season</b>, and random <b style="color:var(--grey)">noise</b>. Our goal is to predict the <b>future</b> part of the line.</p>
+    <svg viewBox="0 0 640 210" style="width:100%;max-height:260px" id="ts-svg"></svg>
+    <span class="note"><b>Watch the lines draw:</b> blue = slow trend, purple = yearly season, grey = random noise, white = what we actually measure (all three added together). Forecasting means separating the predictable parts (trend and season) from the noise.</span>
+    <button class="btn sm" style="margin-top:10px" onclick="drawTS()">Replay animation</button>
+  </div>
+
+  <div class="cpanel glass" id="cp1">
+    <h3>What is stationarity?</h3>
+    <p style="color:var(--ink2)">A series is <b>stationary</b> when it hovers around a steady average instead of drifting off. Most forecasting methods are built for steady series, so we test for it and fix it if needed.</p>
+    <div class="grid g2">
+      <div><div class="sub">Not stationary: drifts upward</div><canvas id="ch-nonstat" height="150"></canvas></div>
+      <div><div class="sub">Stationary: wobbles around a flat average</div><canvas id="ch-stat" height="150"></canvas></div>
+    </div>
+    <div style="margin-top:12px" id="adf-badges"></div>
+    <span class="note"><b>The test (ADF):</b> its <span class="tipw" tabindex="0">p-value<span class="tip">The chance of seeing results like these if the series really were drifting. Below 0.05 (5%) we conclude the series is steady. Above, we can't rule out drifting.</span></span> tells us if the series is steady. Our sunlight series passes. The strong yearly cycle is still removed on purpose by a "seasonal difference" (compare each week with the same week last year).</span>
+  </div>
+
+  <div class="cpanel glass" id="cp2">
+    <h3>What is SARIMA?</h3>
+    <p style="color:var(--ink2)">SARIMA is a forecasting method that learns two things from a series' own past: how <b>this week depends on recent weeks</b>, and how the <b>yearly season repeats</b>. Its settings are the blocks below.</p>
+    <div class="blocks">
+      <div class="blk p"><div class="k">p = 1</div><div class="e">looks back 1 week<br>(AutoRegressive)</div></div>
+      <div class="blk d"><div class="k">d = 0</div><div class="e">no ordinary<br>differencing</div></div>
+      <div class="blk q"><div class="k">q = 1</div><div class="e">corrects last week's<br>mistake (Moving Avg)</div></div>
+      <div class="blk m"><div class="k">m = 52</div><div class="e">season = 52 weeks</div></div>
+      <div class="blk d"><div class="k">D = 1</div><div class="e">compare with same<br>week last year</div></div>
+      <div class="blk q"><div class="k">Q = 1</div><div class="e">corrects last year's<br>mistake</div></div>
+      <div class="blk p"><div class="k">P = 0</div><div class="e">no seasonal<br>look-back</div></div>
+    </div>
+    <div class="eq">next week = a × (this week) + (a correction for last week's miss) + (the same week last year, adjusted) + noise</div>
+    <div style="margin-top:14px"><b>Differencing, live:</b> subtracting last year's value from each week removes the season, leaving a steady series. Press the button.</div>
+    <div class="ctl" style="margin-top:8px"><button class="btn pri" id="diffbtn" onclick="toggleDiff()">Apply seasonal differencing</button><span class="pill" id="diffstate">Showing: original series</span></div>
+    <canvas id="ch-diff" height="110"></canvas>
+  </div>
+
+  <div class="cpanel glass" id="cp3">
+    <h3>Our improved model (SARIMAX) — and what about LSTM?</h3>
+    <p style="color:var(--ink2)"><b>SARIMAX</b> is SARIMA plus <b>extra inputs</b> (the "X"). Here the extras are last week's <b>humidity, temperature and cloud cover</b>. Everything else is identical, so any improvement comes only from the weather.</p>
+    <svg viewBox="0 0 640 150" style="width:100%;max-height:190px">
+      <g font-size="13" style="fill:var(--ink2)"><rect x="10" y="12" width="150" height="34" rx="10" fill="rgba(167,139,250,.18)" stroke="#a78bfa"/><text x="26" y="34">Past sunlight</text>
+      <rect x="10" y="58" width="150" height="34" rx="10" fill="rgba(16,185,129,.18)" stroke="#10b981"/><text x="26" y="80">Humidity (last week)</text>
+      <rect x="10" y="104" width="150" height="34" rx="10" fill="rgba(16,185,129,.18)" stroke="#10b981"/><text x="26" y="126">Temp + cloud (last week)</text>
+      <rect x="260" y="40" width="150" height="70" rx="14" fill="rgba(0,212,255,.15)" stroke="#00d4ff"/><text x="290" y="70">SARIMAX</text><text x="278" y="90" font-size="11">learns season + inputs</text>
+      <rect x="500" y="52" width="130" height="46" rx="12" fill="rgba(245,158,11,.18)" stroke="#f59e0b"/><text x="516" y="80">Next week's sun</text></g>
+      <g stroke="#00d4ff" stroke-width="2" fill="none"><path d="M160 29 L260 62"/><path d="M160 75 L260 75"/><path d="M160 121 L260 88"/><path d="M410 75 L500 75"/></g>
+    </svg>
+    <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+    <h3>What is an LSTM? <span class="badge tie" style="margin-left:6px">not used in this project</span></h3>
+    <p style="color:var(--ink2)">An <b>LSTM</b> is a neural network that keeps a "memory" of long past patterns and can learn curved, complicated relationships that SARIMA-type models cannot. It needs more data tuning and is harder to explain. <b>We did not build one</b>; comparing SARIMAX with an LSTM is listed under future work.</p>
+    <svg viewBox="0 0 640 170" style="width:100%;max-height:210px" id="lstm-svg"></svg>
+  </div>
+
+  <div class="cpanel glass" id="cp4">
+    <div class="tag">🔬 Research gap</div>
+    <h3>What the papers did, and what they left open</h3>
+    <div class="tl" id="papers"></div>
+    <span class="note"><b>Note:</b> each paper's title, authors, journal and DOI were checked and its abstract was read. Read the full papers before citing any detail.</span>
+    <div class="grid g2" style="margin-top:14px">
+      <div class="glass gapbox"><div class="tag">What none of them did (to our limited search)</div><div id="gaptxt"></div></div>
+      <div class="glass did"><div class="tag" style="background:linear-gradient(135deg,#059669,#10b981)">What WE did differently</div><div id="didtxt"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SECTION 3: DATA EXPLORER ================= -->
+<section id="explorer" class="reveal">
+  <h2><span class="n">02</span>Explore the data</h2>
+  <p class="lead">Weekly average sunlight reaching the ground for <b id="ex-city"></b>. Drag to zoom, use the slider at the bottom, and switch layers on and off.</p>
+  <div class="glass">
+    <div class="tg">
+      <label><input type="checkbox" id="tg-trend"> Trend</label>
+      <label><input type="checkbox" id="tg-seas"> Seasonality</label>
+      <label><input type="checkbox" id="tg-noise"> Noise</label>
+      <label><input type="checkbox" id="tg-split" checked> Train / test regions</label>
+    </div>
+    <div id="ex-main" class="plot" style="min-height:380px"></div>
+    <div id="ex-seas" class="plot s" style="display:none"></div>
+    <div id="ex-noise" class="plot s" style="display:none"></div>
+    <span class="note"><b>What you're looking at:</b> each point is one week's average sunlight (kWh per m² per day). It repeats every year: bright in spring, duller in the monsoon. <b>Blue shading</b> = weeks the models learned from; <b>purple shading</b> = weeks hidden from the models and used for testing. Trend is the slow average; Seasonality is the yearly shape; Noise is what's left over (the unpredictable part).</span>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="glass">
+      <h3>Memory of the series (ACF / PACF)</h3><div class="sub">How strongly a week resembles weeks in the past. Hover a bar.</div>
+      <div class="tg"><label><input type="radio" name="acfmode" value="level" checked> Raw series</label><label><input type="radio" name="acfmode" value="sdiff"> After seasonal differencing</label></div>
+      <div class="grid g2" style="gap:10px"><div><div class="sub">ACF</div><canvas id="ch-acf" height="190"></canvas></div><div><div class="sub">PACF</div><canvas id="ch-pacf" height="190"></canvas></div></div>
+      <span class="note"><b>Take-away:</b> the tall bar near lag 52 means "this week looks like the same week last year" (yearly season). These two charts are how the model's settings were chosen.</span>
+    </div>
+    <div class="glass">
+      <h3>Stationarity meter</h3><div class="sub">Is the series steady enough for these models?</div>
+      <div id="ex-gauge" class="plot s" style="min-height:250px"></div>
+      <div id="ex-adf"></div>
+      <span class="note"><b>How to read it:</b> the needle shows how strongly the test rejects "the series drifts". Past the green line (about 2.9) it counts as steady.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SECTION 4: MODEL LAB ================= -->
+<section id="lab" class="reveal">
+  <h2><span class="n">03</span>Model lab</h2>
+  <p class="lead">Two models forecast each test week <b>one week ahead</b>, using only what was known before that week. Switch tabs to inspect each one, then compare them head to head.</p>
+  <div class="tabs" id="labtabs"><button class="on" data-k="sarima">Baseline SARIMA</button><button data-k="sarimax">Improved SARIMAX</button><button data-k="h2h">Head-to-Head</button></div>
+
+  <div class="pane on" id="pane-model">
+    <div class="glass" style="margin-bottom:16px"><h3 id="ml-title"></h3><div class="spec" id="ml-spec"></div></div>
+    <div class="glass"><h3>Actual vs predicted (test weeks)</h3><div class="sub">White = what really happened. Colour = the model's one-week-ahead forecast. Shaded band = 95% expected range. Hover for the exact miss.</div>
+      <div id="ml-main" class="plot" style="min-height:380px"></div>
+      <span class="note" id="ml-note1"></span>
+      <div class="btnrow"><button class="btn sm" id="dl-test">Download test forecasts (CSV)</button><button class="btn sm" id="cp-test">Copy CSV</button><span class="sub" id="dl-test-msg" style="margin:0"></span></div></div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="glass"><h3>Where it struggled (error heatmap)</h3><div class="sub">Average miss by month and year. Brighter = worse.</div><div id="ml-heat" class="plot"></div><span class="note" id="ml-note2"></span></div>
+      <div class="glass"><h3>Are the misses balanced? (residuals)</h3><div class="sub">Actual minus predicted, week by week.</div><div id="ml-hist" class="plot"></div><span class="note" id="ml-note3"></span></div>
+    </div>
+  </div>
+
+  <div class="pane" id="pane-h2h">
+    <div class="winner glass" id="winner"></div>
+    <div class="grid g3" style="margin-top:16px" id="h2h-cards"></div>
+    <div class="glass" style="margin-top:16px"><h3>All forecasts together</h3><div class="sub">Hover any week to see the actual value and both models' forecasts with their misses. Drag the slider below to zoom.</div><div id="h2h-both" class="plot" style="min-height:360px"></div></div>
+    <div class="glass" style="margin-top:16px"><h3>Average miss, four methods side by side</h3><div class="sub">Shorter bar = smaller miss. Grey and amber are simple guesses; purple is the baseline; green adds weather.</div>
+      <div class="grid g3"><div><div class="sub" style="text-align:center">MAE (kWh/m²/day)</div><canvas id="bar-mae" height="230"></canvas></div><div><div class="sub" style="text-align:center">RMSE</div><canvas id="bar-rmse" height="230"></canvas></div><div><div class="sub" style="text-align:center">MAPE (%)</div><canvas id="bar-mape" height="230"></canvas></div></div>
+      <span class="note" id="h2h-note"></span></div>
+  </div>
+</section>
+
+<!-- ================= CITY LAB ================= -->
+<section id="cities" class="reveal">
+  <h2><span class="n">04</span>City-by-city comparison</h2>
+  <p class="lead">The same models, the same test, five different climates. Click a row to switch the whole page to that city.</p>
+  <div class="grid g2">
+    <div class="glass"><h3>Average miss by city and method</h3><div class="sub">MAE, shorter is better.</div><canvas id="ct-mae" height="260"></canvas></div>
+    <div class="glass"><h3>Did adding weather help? (change in error)</h3><div class="sub">Right of zero = SARIMAX better, left = worse. ★ = statistically significant.</div><canvas id="ct-imp" height="260"></canvas></div>
+  </div>
+  <div class="glass" style="margin-top:16px"><h3>When is each city sunny? (average by month)</h3><div class="sub">kWh/m²/day. Brighter = more sunlight.</div><div id="ct-heat" class="plot" style="min-height:300px"></div>
+    <span class="note"><b>Why this matters:</b> cities have different rhythms. Mumbai dims sharply in the monsoon (Jun–Sep), but Delhi and Jodhpur are dimmest in winter, not the monsoon. That is why a fixed "monsoon vs dry" split does not fit every city.</span></div>
+  <div class="glass" style="margin-top:16px"><h3>Scoreboard</h3><div style="overflow-x:auto"><table id="ct-table"></table></div>
+    <span class="note" id="ct-note"></span></div>
+</section>
+
+<!-- ================= SECTION 5: SIMULATOR ================= -->
+<section id="sim" class="reveal">
+  <h2><span class="n">05</span>Try it yourself</h2>
+  <p class="lead">Two interactive tools. The first forecasts beyond the data and then lets you check it against what really happened. The second challenges you to beat the models.</p>
+  <div class="grid g2">
+    <div class="glass"><h3>A · Forecast simulator</h3>
+      <div class="sub">Uses the SARIMA baseline: multi-week SARIMAX would need future weather, which we do not have.</div>
+      <div class="ctl"><label>Forecast horizon: <b id="hz-lbl">4 weeks (28 days)</b><br><input type="range" id="hz" min="1" max="8" value="4"></label>
+        <button class="btn pri" id="gen-btn">Generate forecast</button></div>
+      <div class="tg"><label><input type="checkbox" id="reveal"> Reveal what really happened</label></div>
+      <div id="sim-chart" class="plot" style="min-height:330px"></div>
+      <div style="overflow-x:auto"><table id="sim-table"></table></div>
+      <div class="btnrow"><button class="btn sm" id="dl-sim">Download forecast (CSV)</button><button class="btn sm" id="cp-sim">Copy CSV</button><span class="sub" id="sim-msg" style="margin:0"></span></div>
+      <span class="note" id="sim-note"></span></div>
+    <div class="glass"><h3>B · Can you beat the models?</h3>
+      <div class="sub">A random week from the test period. Study the last 12 weeks, type your guess for the <b>next</b> week's sunlight, and see who is closest.</div>
+      <canvas id="ch-chal" height="190"></canvas>
+      <div class="ctl" style="margin-top:10px"><label>Your guess (kWh/m²/day): <input type="number" id="guess" min="1" max="9" step="0.05" value="5.4"></label>
+        <input type="range" id="guess-r" min="1.5" max="8" step="0.05" value="5.4">
+        <button class="btn pri" id="lock">Lock in my guess</button><button class="btn" id="nextw">New week</button></div>
+      <div id="chal-res"></div></div>
+  </div>
+</section>
+
+<!-- ================= SECTION 6: RESULTS ================= -->
+<section id="results" class="reveal">
+  <h2><span class="n">06</span>Results summary</h2>
+  <p class="lead" id="res-lead"></p>
+  <div class="price" id="price"></div>
+  <div class="glass" style="margin-top:18px"><h3>From gap to result</h3>
+    <div class="flow"><div class="glass"><div class="tag">1 · Gap identified</div><div id="fl1"></div></div><div class="arrow">➜</div>
+    <div class="glass"><div class="tag">2 · Solution applied</div><div id="fl2"></div></div><div class="arrow">➜</div>
+    <div class="glass"><div class="tag" style="background:linear-gradient(135deg,#059669,#10b981)">3 · Result achieved</div><div id="fl3"></div></div></div></div>
+  <h3 style="margin:24px 0 10px">What to try next (click an idea)</h3>
+  <div class="grid g3" id="ideas"></div>
+</section>
+
+<!-- ================= SECTION 7: DATASET ================= -->
+<section id="dataset" class="reveal">
+  <h2><span class="n">07</span>The dataset</h2>
+  <p class="lead">The raw weekly data behind every chart for <b id="ds-city"></b>. Scroll the table, filter by period, or download it.</p>
+  <div class="glass">
+    <div class="ctl"><label>Show: <select id="ds-period"><option value="all">All weeks</option><option value="train">Training weeks</option><option value="test">Test weeks</option></select></label>
+      <button class="btn sm" id="dl-raw">Download raw data (CSV)</button><button class="btn sm" id="cp-raw">Copy CSV</button><span class="sub" id="ds-msg" style="margin:0"></span></div>
+    <div class="grid g4" id="ds-stats"></div>
+    <div class="tscroll"><table id="ds-table"><thead><tr><th>Week ending</th><th>Solar irradiance<br>kWh/m²/day</th><th>Temperature<br>°C</th><th>Humidity<br>%</th><th>Cloud cover<br>%</th></tr></thead><tbody id="ds-body"></tbody></table></div>
+    <div class="sub" id="ds-count" style="margin-top:8px"></div>
+    <span class="note"><b>Where it comes from:</b> NASA POWER (Prediction Of Worldwide Energy Resources), daily point data from the POWER API for one grid point per city (<span id="ds-ll"></span>). Solar irradiance is the all-sky surface shortwave downward irradiance (ALLSKY_SFC_SW_DWN), the sunlight reaching the ground under real cloud conditions. Temperature is T2M (2 m), humidity is RH2M and cloud cover is CLOUD_AMT. The values are satellite and reanalysis estimates (MERRA-2, SYN1deg), not ground-station readings. Each row is the mean of 7 daily values (Monday to Sunday); purple rows are the test weeks hidden from the models.</span>
+    <span class="note">If a CSV download does nothing, your viewer is blocking downloads. Use <b>Copy CSV</b> and paste into a spreadsheet instead.</span>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <details><summary>Papers reviewed</summary><div id="refs"></div></details>
+  <details><summary>Dataset and method notes</summary>
+    <ul style="text-align:left"><li>Data: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a> daily point data (all-sky surface shortwave radiation, humidity, temperature, cloud amount), one grid point per city. A satellite and reanalysis product, not a ground sensor.</li>
+    <li>Weekly means (Mon–Sun), window 2000-01-01 to 2026-07-30 (cloud amount is not yet published after that). 80/20 chronological split.</li>
+    <li>Forecasts are true one-week-ahead: SARIMAX uses only last week's weather. Parameters are fixed after training.</li>
+    <li>Significance: Diebold–Mariano test on squared errors.</li>
+    <li>The "forecast simulator" uses the SARIMA parameters learned on the training weeks, updated through the end of the modelling window (26 Jul 2026), and is checked against NASA POWER values published afterwards.</li></ul></details>
+  <details><summary>Plain-English glossary</summary><dl class="gl" style="text-align:left">
+    <dt>kWh/m²/day</dt><dd>Sunlight energy landing on one square metre in a day. About 5.4 is typical here.</dd>
+    <dt>MAE</dt><dd>Average miss, in the same units as sunlight. Easiest to understand. Smaller is better.</dd>
+    <dt>RMSE</dt><dd>Like MAE, but big misses count extra.</dd>
+    <dt>MAPE</dt><dd>Average miss as a percentage of the real value.</dd>
+    <dt>Seasonal naive</dt><dd>Guess that next week equals the same week last year. A model must beat this to be useful.</dd>
+    <dt>Naive</dt><dd>Guess that next week equals this week.</dd>
+    <dt>p-value</dt><dd>How likely a difference this size is to be pure chance. Below 0.05 = "statistically significant".</dd>
+    <dt>Residual</dt><dd>Actual minus predicted: the miss.</dd></dl></details>
+  <p><span class="pill">Built for AAT Lab Assignment · Time Series Analysis (24AM7PCTSA)</span></p>
+</footer>
+
+<script>
+const D = __DATA__;
+const EXT = __EXT__;
+const RAW = __RAW__;
+const PAPERS = __PAPERS__;
+const GAP = __GAP__;
+
+// ------------------------------------------------------------------ helpers
+const $ = id => document.getElementById(id);
+const CITIES = D.meta.cities;
+let city = CITIES[0];
+const CD = () => D.city[city];
+const COL_DARK = {blue:'#00d4ff', purple:'#a78bfa', pdeep:'#7c3aed', green:'#10b981', amber:'#f59e0b', grey:'#94a3b8', white:'#f5f5ff', red:'#f43f5e'};
+const COL_LIGHT = {blue:'#0369a1', purple:'#6d28d9', pdeep:'#5b21b6', green:'#047857', amber:'#b45309', grey:'#64748b', white:'#141a33', red:'#be123c'};
+const COL = Object.assign({}, COL_DARK);
+const MCOL = {sarima:COL.purple, sarimax:COL.green, seasonal_naive:COL.amber, naive:COL.grey};
+const MNAME = {sarima:'SARIMA (baseline)', sarimax:'SARIMAX (+ weather)', seasonal_naive:'Same week last year', naive:'Same as last week'};
+let GRID = 'rgba(255,255,255,.07)';
+const TH = {font:'#cbd5e1', hoverbg:'#14142b', hoverborder:'#445', hoverfont:'#fff', line:'rgba(255,255,255,.15)', surf:'#0a0a1a', zero:'#fff', slider:'rgba(255,255,255,.04)'};
+const ax = (o={}) => Object.assign({gridcolor:GRID, zeroline:false, linecolor:TH.line}, o);
+const PL = (o={}) => Object.assign({paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:TH.font, size:12},
+  margin:{l:52,r:16,t:8,b:42}, legend:{orientation:'h', y:1.13}, hoverlabel:{bgcolor:TH.hoverbg, bordercolor:TH.hoverborder, font:{color:TH.hoverfont}}}, o);
+const CFG = {responsive:true, displaylogo:false, modeBarButtonsToRemove:['lasso2d','select2d']};
+const f2 = x => x.toFixed(2), f3 = x => x.toFixed(3), sgn = (x,d=1) => (x>=0?'+':'−') + Math.abs(x).toFixed(d);
+const rgba = (hex,a) => {const n=parseInt(hex.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`};
+Chart.defaults.color = '#cbd5e1'; Chart.defaults.borderColor = GRID; Chart.defaults.font.family = 'Inter,system-ui,sans-serif';
+const charts = {};
+function mk(id, cfg){ if(charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); return charts[id]; }
+function countUp(el, to, dec=0, suf='', dur=1300, pre=''){
+  const t0 = performance.now();
+  (function f(t){const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3), v=to*e;
+    el.textContent = pre + (dec? v.toFixed(dec) : Math.round(v).toLocaleString()) + suf; if(k<1) requestAnimationFrame(f);})(t0);
+}
+function verdict(c){const d=D.city[c]; const better=d.improvement_pct.RMSE>0, sig=d.dm.p<0.05;
+  return sig ? (better ? {t:'SARIMAX significantly better', c:'ok'} : {t:'SARIMA significantly better', c:'no'}) : {t:'Statistical tie', c:'tie'};}
+const stars = n => '<span class="stars">'+'★'.repeat(n)+'<span class="off">'+'★'.repeat(5-n)+'</span></span>';
+
+// ------------------------------------------------------------------ reveal on scroll
+const io = new IntersectionObserver(es => es.forEach(e => {if(e.isIntersecting){e.target.classList.add('in'); io.unobserve(e.target);}}), {threshold:.08});
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// ------------------------------------------------------------------ city selector
+CITIES.forEach(c => { const b = document.createElement('button'); b.textContent = c; b.dataset.c = c; if(c===city) b.classList.add('on');
+  b.onclick = () => setCity(c); $('citysel').appendChild(b); });
+function setCity(c){ city = c; document.querySelectorAll('#citysel button').forEach(b => b.classList.toggle('on', b.dataset.c===c)); updateAll(); }
+
+// ------------------------------------------------------------------ HERO
+function renderHero(){
+  const d = CD(), best = Math.min(d.metrics.sarima.overall.MAPE, d.metrics.sarimax.overall.MAPE), imp = d.improvement_pct.MAPE;
+  countUp($('k1'), d.daily_rows); $('k1d').textContent = `${d.n_weeks.toLocaleString()} weeks · ${(d.daily_rows*5).toLocaleString()} daily records across all 5 cities`;
+  $('k2').textContent = d.train_range[0].slice(0,4)+' → '+d.train_range[1].slice(0,4); $('k2d').textContent = `${d.n_train} training weeks · ${d.n_test} test weeks (${d.test_range[0].slice(0,4)}–${d.test_range[1].slice(0,4)})`;
+  countUp($('k3'), best, 2, '%'); $('k3d').textContent = `about ${(best).toFixed(0)}% off on a typical week · ${d.metrics.sarimax.overall.MAPE<d.metrics.sarima.overall.MAPE?'SARIMAX':'SARIMA'} is nominally best here`;
+  countUp($('k4'), Math.abs(imp), 1, '%', 1300, imp>=0?'+':'−'); $('k4d').textContent = d.dm.p<0.05 ? 'statistically significant' : `not significant (p = ${d.dm.p.toFixed(2)}): could be chance`;
+  const v = verdict(city), beat = (d.metrics.seasonal_naive.overall.MAE - d.metrics.sarimax.overall.MAE)/d.metrics.seasonal_naive.overall.MAE*100;
+  $('short').textContent = v.c==='tie'
+    ? `In ${city}, adding last week's weather changed the forecast error by only ${Math.abs(d.improvement_pct.MAE).toFixed(1)}%, and that could just be luck.`
+    : `In ${city}, ${v.t.toLowerCase()}: adding last week's weather changed the error by ${sgn(d.improvement_pct.MAE)}%.`;
+  $('short2').textContent = `Both models are about ${beat.toFixed(0)}% more accurate than guessing "same as the same week last year". The fancier model is hardly better than the plain one, and that is a real result, not a mistake.`;
+}
+$('gen').textContent = D.meta.generated;
+setInterval(() => $('clock').textContent = new Date().toLocaleString(), 1000); $('clock').textContent = new Date().toLocaleString();
+
+// ------------------------------------------------------------------ CONCEPT CARDS
+const CC = [['⏳','What is a time series?','Data over time'],['⚖️','What is stationarity?','Is it steady?'],['🧩','What is SARIMA?','The baseline model'],['🌦️','SARIMAX & LSTM','The improved model'],['🔬','Research gap','What was missing']];
+CC.forEach((c,i) => { const b = document.createElement('button'); b.className='glass ccard'+(i===0?' on':''); b.innerHTML=`<div class="ic">${c[0]}</div><div class="t">${c[1]}</div><div class="s">${c[2]}</div>`;
+  b.onclick = () => { document.querySelectorAll('.ccard').forEach((x,j)=>x.classList.toggle('on',j===i)); document.querySelectorAll('.cpanel').forEach((x,j)=>x.classList.toggle('on',j===i));
+    if(i===0) drawTS(); if(i===1) renderStat(); if(i===2) renderDiff(); if(i===3) drawLSTM(); };
+  $('ccards').appendChild(b); });
+
+let seed = 7; const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
+function drawTS(){
+  seed = 11; const n=120, W=640, H=210, tr=[], se=[], no=[], all=[];
+  for(let i=0;i<n;i++){ tr.push(150 - i*0.35); se.push(24*Math.sin(2*Math.PI*i/40)); no.push((rnd()-.5)*18); }
+  tr.forEach((t,i)=>all.push(t+se[i]+no[i]));
+  const path = (arr,off) => arr.map((v,i)=>(i?'L':'M')+(i/(n-1)*(W-20)+10).toFixed(1)+' '+(v+off).toFixed(1)).join(' ');
+  const L = [[tr,0,COL.blue,'0s'],[se.map(v=>v),95,COL.purple,'.5s'],[no,168,COL.grey,'1s'],[all,0,COL.white,'1.6s']];
+  $('ts-svg').innerHTML = L.map(([a,o,c,d])=>`<path class="draw" pathLength="1" d="${path(a,o)}" fill="none" stroke="${c}" stroke-width="${c===COL.white?3:2}" style="animation-delay:${d}"/>`).join('') +
+   `<g font-size="12" style="fill:var(--ink2)"><text x="14" y="16" fill="${COL.blue}">trend</text><text x="14" y="${95-30}" fill="${COL.purple}">season</text><text x="14" y="${168-18}" fill="${COL.grey}">noise</text><text x="560" y="16" fill="${COL.white}">what we measure</text></g>`;
+}
+function renderStat(){
+  seed = 3; const n=80, a=[], b=[]; let v=0; for(let i=0;i<n;i++){ v += 0.35 + (rnd()-.5)*1.2; a.push(v); b.push(5+(rnd()-.5)*2.2); }
+  const o = c => ({type:'line', data:{labels:a.map((_,i)=>i), datasets:[{data:c, borderColor:COL.blue, pointRadius:0, tension:.3, borderWidth:2}]}, options:{plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{grid:{color:GRID}}}}});
+  mk('ch-nonstat', o(a)); const s = o(b); s.data.datasets[0].borderColor = COL.green; mk('ch-stat', s);
+  const d = CD(), l = d.adf.level, sd = d.adf.sdiff;
+  const row = (nm,a) => `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)"><div><b>${nm}</b><div class="sub" style="margin:0">ADF = ${a.stat.toFixed(2)} · p = ${a.p<0.0001?'<0.0001':a.p.toFixed(4)}</div></div><span class="badge ${a.p<0.05?'ok':'no'}">${a.p<0.05?'✅ Stationary':'❌ Non-stationary'}</span></div>`;
+  $('adf-badges').innerHTML = `<div class="sub">Real result for <b>${city}</b>:</div>` + row('Weekly sunlight', l) + row('After seasonal differencing', sd);
+}
+let diffOn = false;
+function diffData(){ const s = CD().solar.slice(0,156); const orig = s.slice(52), dif = s.slice(52).map((v,i)=>v - s[i]); return {orig, dif, labels:CD().dates.slice(52,156)}; }
+function renderDiff(){
+  diffOn = false; const {orig, labels} = diffData(); $('diffbtn').textContent = 'Apply seasonal differencing'; $('diffstate').textContent = 'Showing: original series';
+  mk('ch-diff', {type:'line', data:{labels, datasets:[{label:'Sunlight (kWh/m²/day)', data:orig.slice(), borderColor:COL.blue, backgroundColor:rgba(COL.blue,.12), fill:true, pointRadius:0, tension:.3, borderWidth:2}]},
+    options:{animation:{duration:1200, easing:'easeInOutCubic'}, plugins:{legend:{display:false}, tooltip:{callbacks:{title:i=>i[0].label}}}, scales:{x:{ticks:{maxTicksLimit:8}}, y:{grid:{color:GRID}, title:{display:true,text:'kWh/m²/day'}}}}});
+}
+function toggleDiff(){ if(!charts['ch-diff']) renderDiff(); diffOn = !diffOn; const {orig, dif} = diffData(), c = charts['ch-diff'];
+  c.data.datasets[0].data = (diffOn?dif:orig).slice(); c.data.datasets[0].borderColor = diffOn?COL.green:COL.blue; c.data.datasets[0].backgroundColor = rgba(diffOn?COL.green:COL.blue,.12);
+  c.data.datasets[0].label = diffOn?'This week minus the same week last year':'Sunlight (kWh/m²/day)'; c.update();
+  $('diffbtn').textContent = diffOn?'Undo differencing':'Apply seasonal differencing'; $('diffstate').textContent = diffOn?'Showing: differenced series (season removed, now steady around 0)':'Showing: original series'; }
+function drawLSTM(){
+  const cols=[[60,[40,85,130]],[220,[28,68,108,148]],[380,[28,68,108,148]],[540,[85]]]; let s='';
+  cols.forEach((c,i)=>{ if(i<3) cols[i+1][1].forEach(y2=>c[1].forEach(y1=>s+=`<line x1="${c[0]}" y1="${y1}" x2="${cols[i+1][0]}" y2="${y2}" stroke="rgba(0,212,255,.25)"/>`)); });
+  cols.forEach((c,i)=>c[1].forEach((y,j)=>s+=`<circle cx="${c[0]}" cy="${y}" r="13" fill="${i===0?COL.purple:i===3?COL.amber:COL.blue}" opacity=".9"><animate attributeName="r" values="12;15;12" dur="${1.6+((i+j)%3)*.4}s" repeatCount="indefinite"/></circle>`));
+  s += `<g font-size="12" style="fill:var(--ink2)"><text x="26" y="168">input (past data)</text><text x="190" y="168">hidden: memory cells</text><text x="500" y="168">output (forecast)</text></g>`;
+  $('lstm-svg').innerHTML = s;
+}
+// papers + gap
+$('papers').innerHTML = PAPERS.map(p=>`<div class="it"><div class="y">${p.year}</div><div><b>${p.title}</b></div><div class="miss">${p.authors} · ${p.venue}</div><div class="miss"><b>What it missed / why it matters to us:</b> ${p.gap}</div><div class="vf">${p.abstract_verified?'✔ abstract verified':'⚠ finding not verified — read the paper'}</div></div>`).join('') +
+  `<div class="it w"><div class="y" style="color:var(--green)">This project</div><div><b>Controlled test: SARIMA vs SARIMAX across five Indian cities</b></div></div>`;
+$('gaptxt').innerHTML = `<p style="margin:0;font-size:16px"><b>${GAP.gap}</b></p>`;
+$('didtxt').innerHTML = `<p style="margin:0"><b>${GAP.address}</b></p>`;
+$('refs').innerHTML = '<ol style="text-align:left">' + PAPERS.map(p=>`<li>${p.authors} (${p.year}). ${p.title}. <i>${p.venue}</i>. doi:${p.doi}</li>`).join('') + '</ol>';
+
+// ------------------------------------------------------------------ DATA EXPLORER
+function renderExplorer(){
+  const d = CD(); $('ex-city').textContent = city;
+  const tr = [{x:d.dates, y:d.solar, type:'scatter', mode:'lines', name:'Weekly sunlight', line:{color:COL.blue, width:1.6}, hovertemplate:'%{x|%d %b %Y}<br>%{y:.2f} kWh/m²/day<extra></extra>'},
+    {x:d.decomp.dates, y:d.decomp.trend, type:'scatter', mode:'lines', name:'Trend', line:{color:COL.white, width:2.4}, visible:$('tg-trend').checked, hovertemplate:'Trend %{y:.2f}<extra></extra>'}];
+  const shapes = $('tg-split').checked ? [
+    {type:'rect', xref:'x', yref:'paper', x0:d.train_range[0], x1:d.train_range[1], y0:0, y1:1, fillcolor:rgba(COL.blue,.06), line:{width:0}, layer:'below'},
+    {type:'rect', xref:'x', yref:'paper', x0:d.test_range[0], x1:d.test_range[1], y0:0, y1:1, fillcolor:rgba(COL.pdeep,.22), line:{width:0}, layer:'below'}] : [];
+  const ann = $('tg-split').checked ? [{x:d.train_range[0], xref:'x', y:1.02, yref:'paper', text:'training weeks', showarrow:false, xanchor:'left', font:{color:COL.blue,size:12}},
+    {x:d.test_range[0], xref:'x', y:1.02, yref:'paper', text:'test weeks (hidden from models)', showarrow:false, xanchor:'left', font:{color:COL.purple,size:12}}] : [];
+  Plotly.react('ex-main', tr, PL({shapes, annotations:ann, xaxis:ax({rangeslider:{visible:true, thickness:.07, bgcolor:TH.slider}}), yaxis:ax({title:'kWh / m² / day'}), margin:{l:52,r:16,t:26,b:30}, legend:{orientation:'h', y:-0.28}}), CFG);
+  const sz = (id,y,name,color) => { $(id).style.display = 'block'; Plotly.react(id, [{x:d.decomp.dates, y, type:'scatter', mode:'lines', name, line:{color, width:1.4}, hovertemplate:name+' %{y:.2f}<extra></extra>'}],
+    PL({xaxis:ax(), yaxis:ax({title:name}), margin:{l:52,r:16,t:6,b:30}, showlegend:false, shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:'rgba(255,255,255,.3)',width:1}}]}), CFG); };
+  $('ex-seas').style.display = $('tg-seas').checked ? 'block' : 'none'; $('ex-noise').style.display = $('tg-noise').checked ? 'block' : 'none';
+  if($('tg-seas').checked) sz('ex-seas', d.decomp.seasonal, 'Seasonality', COL.purple);
+  if($('tg-noise').checked) sz('ex-noise', d.decomp.resid, 'Noise', COL.grey);
+  renderACF(); renderGauge();
+}
+['tg-trend','tg-seas','tg-noise','tg-split'].forEach(id => $(id).onchange = renderExplorer);
+document.querySelectorAll('input[name=acfmode]').forEach(r => r.onchange = renderACF);
+function renderACF(){
+  const d = CD(), mode = document.querySelector('input[name=acfmode]:checked').value, acf = d['acf_'+mode], pacf = d['pacf_'+mode];
+  const band = 1.96/Math.sqrt(d.n_train);
+  const explain = k => k===0 ? 'the week compared with itself' : k===1 ? 'vs last week' : k===52 ? 'vs the SAME WEEK LAST YEAR (yearly season)' : k===26 ? 'vs half a year ago (opposite season)' : k+' weeks ago';
+  const o = (arr,label,col) => ({type:'bar', data:{labels:arr.map((_,i)=>i), datasets:[{data:arr, backgroundColor:arr.map((v,i)=>i===52?COL.amber:col), borderRadius:1},
+      {type:'line', data:arr.map(()=>band), borderColor:'rgba(255,255,255,.4)', borderDash:[4,4], pointRadius:0, borderWidth:1}, {type:'line', data:arr.map(()=>-band), borderColor:'rgba(255,255,255,.4)', borderDash:[4,4], pointRadius:0, borderWidth:1}]},
+    options:{animation:{duration:600}, plugins:{legend:{display:false}, tooltip:{filter:t=>t.datasetIndex===0, callbacks:{title:t=>`${label} at lag ${t[0].label}`, label:t=>`Correlation ${t.parsed.y.toFixed(2)} (${explain(+t.label)})`}}}, scales:{x:{ticks:{maxTicksLimit:7}, title:{display:true,text:'lag (weeks)'}}, y:{min:-1,max:1,grid:{color:GRID}}}}});
+  mk('ch-acf', o(acf,'ACF',COL.blue)); mk('ch-pacf', o(pacf,'PACF',COL.purple));
+}
+function renderGauge(){
+  const d = CD(), v = -d.adf.level.stat;
+  Plotly.react('ex-gauge', [{type:'indicator', mode:'gauge+number', value:v, number:{font:{color:COL.white}, valueformat:'.1f'}, title:{text:'Strength of evidence the series is steady', font:{size:13,color:TH.font}},
+    gauge:{axis:{range:[0,14], tickcolor:'#8b93a7'}, bar:{color:COL.blue, thickness:.28}, bgcolor:'rgba(255,255,255,.05)', borderwidth:0,
+      steps:[{range:[0,2.86],color:rgba(COL.red,.45)},{range:[2.86,14],color:rgba(COL.green,.28)}], threshold:{line:{color:TH.zero,width:3}, thickness:.8, value:2.86}}}],
+    {paper_bgcolor:'rgba(0,0,0,0)', font:{color:TH.font}, margin:{l:20,r:20,t:40,b:6}, height:230}, CFG);
+  $('ex-adf').innerHTML = `<span class="badge ${d.adf.level.p<0.05?'ok':'no'}">${d.adf.level.p<0.05?'✅ Stationary':'❌ Non-stationary'}</span> <span class="sub">ADF ${d.adf.level.stat.toFixed(2)}, p ${d.adf.level.p<0.0001?'<0.0001':d.adf.level.p.toFixed(4)} · red = drifting zone, green = steady zone (line ≈ 5% critical value)</span>`;
+}
+
+// ------------------------------------------------------------------ MODEL LAB
+let labKind = 'sarima';
+document.querySelectorAll('#labtabs button').forEach(b => b.onclick = () => { labKind = b.dataset.k;
+  document.querySelectorAll('#labtabs button').forEach(x=>x.classList.toggle('on', x===b));
+  $('pane-model').classList.toggle('on', labKind!=='h2h'); $('pane-h2h').classList.toggle('on', labKind==='h2h'); renderLab(); });
+function renderLab(){ if(labKind==='h2h') renderH2H(); else renderModel(labKind); }
+function renderModel(k){
+  const d = CD(), t = d.test, col = MCOL[k], pred = t[k], lo = t[k+'_lo'], hi = t[k+'_hi'], err = t.actual.map((a,i)=>a-pred[i]);
+  const m = d.metrics[k].overall, mod = d[k+'_model'];
+  $('ml-title').innerHTML = `${k==='sarima'?'Baseline: SARIMA':'Improved: SARIMAX'} · <span style="color:var(--mute);font-weight:400">${city}</span>`;
+  const rows = [['Settings', k==='sarima' ? '(1,0,1) × (0,1,1) · 52' : '(1,0,1) × (0,1,1) · 52 + 3 inputs'], ['Inputs', k==='sarima'?'past sunlight only':'past sunlight + last week\'s humidity, temp, cloud'],
+    ['Fit quality (AIC)', mod.aic.toFixed(1)], ['Training time', mod.fit_seconds+' s'], ['Complexity', stars(k==='sarima'?3:4)], ['Explainability', stars(k==='sarima'?4:4)],
+    ['MAE', f3(m.MAE)], ['RMSE', f3(m.RMSE)], ['MAPE', f2(m.MAPE)+'%']];
+  $('ml-spec').innerHTML = rows.map(r=>`<div><div class="k">${r[0]}</div><div class="v">${r[1]}</div></div>`).join('');
+  Plotly.react('ml-main', [
+    {x:t.dates, y:hi, type:'scatter', mode:'lines', line:{width:0}, showlegend:false, hoverinfo:'skip'},
+    {x:t.dates, y:lo, type:'scatter', mode:'lines', line:{width:0}, fill:'tonexty', fillcolor:rgba(col,.16), name:'95% expected range', hoverinfo:'skip'},
+    {x:t.dates, y:t.actual, type:'scatter', mode:'lines', name:'Actual', line:{color:COL.white, width:1.8}, hovertemplate:'%{x|%d %b %Y}<br>Actual %{y:.2f}<extra></extra>'},
+    {x:t.dates, y:pred, type:'scatter', mode:'lines', name:k==='sarima'?'SARIMA forecast':'SARIMAX forecast', line:{color:col, width:2}, customdata:err,
+      hovertemplate:'%{x|%d %b %Y}<br>Predicted %{y:.2f}<br>Miss %{customdata:+.2f}<extra></extra>'}],
+    PL({xaxis:ax(), yaxis:ax({title:'kWh / m² / day'}), hovermode:'closest'}), CFG);
+  const cover = t.actual.filter((a,i)=>a>=lo[i]&&a<=hi[i]).length/t.actual.length*100;
+  $('ml-note1').innerHTML = `<b>Take-away:</b> the ${k==='sarima'?'baseline':'improved model'} tracks the seasons closely and misses by about <b>${f2(m.MAE)}</b> kWh/m²/day on average (${f2(m.MAPE)}% of the real value). The real value fell inside the shaded range <b>${cover.toFixed(0)}%</b> of the time (target: 95%).`;
+  // heatmap month x year of mean abs error
+  const years = [...new Set(t.dates.map(s=>+s.slice(0,4)))], z = Array.from({length:12},()=>years.map(()=>[])) ;
+  t.dates.forEach((s,i)=>{ z[+s.slice(5,7)-1][years.indexOf(+s.slice(0,4))].push(Math.abs(err[i])); });
+  const zz = z.map(r=>r.map(a=>a.length? a.reduce((x,y)=>x+y,0)/a.length : null));
+  const mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  Plotly.react('ml-heat', [{type:'heatmap', z:zz, x:years.map(String), y:mn, colorscale:[[0,'#14143a'],[0.35,'#5b3fd1'],[0.7,'#f59e0b'],[1,'#fff0a8']], colorbar:{title:{text:'avg miss'}, thickness:10},
+    hovertemplate:'%{y} %{x}<br>average miss %{z:.2f}<extra></extra>', xgap:2, ygap:2}], PL({xaxis:ax({type:'category'}), yaxis:ax({autorange:'reversed'}), margin:{l:44,r:10,t:6,b:30}}), CFG);
+  let worst=[-1,-1,0]; zz.forEach((r,i)=>r.forEach((v,j)=>{ if(v!==null && v>worst[2]) worst=[i,j,v]; }));
+  $('ml-note2').innerHTML = `<b>Take-away:</b> the biggest average miss was <b>${mn[worst[0]]} ${years[worst[1]]}</b> (${f2(worst[2])}). Blank cells are months outside the test period.`;
+  const mean = err.reduce((a,b)=>a+b,0)/err.length, sd = Math.sqrt(err.reduce((a,b)=>a+(b-mean)**2,0)/(err.length-1)), sk = err.reduce((a,b)=>a+((b-mean)/sd)**3,0)/err.length;
+  Plotly.react('ml-hist', [{type:'histogram', x:err, nbinsx:28, marker:{color:rgba(col,.85), line:{color:TH.surf, width:1}}, hovertemplate:'miss around %{x:.2f}: %{y} weeks<extra></extra>'}],
+    PL({xaxis:ax({title:'actual − predicted (kWh/m²/day)'}), yaxis:ax({title:'weeks'}), bargap:.04, margin:{l:48,r:10,t:6,b:44},
+      shapes:[{type:'line', x0:0,x1:0,yref:'paper',y0:0,y1:1,line:{color:TH.zero,width:1.5,dash:'dot'}}]}), CFG);
+  $('ml-note3').innerHTML = `<b>Take-away:</b> average miss ${sgn(mean,3)} (close to 0 = no systematic over- or under-prediction), typical spread ${f2(sd)}, skew ${sk.toFixed(2)} (${Math.abs(sk)<0.5?'fairly balanced':'tilted: misses lean one way'}).`;
+}
+let confettiRun = null;
+function renderH2H(){
+  const d = CD(), M = d.metrics, keys = ['seasonal_naive','naive','sarima','sarimax'];
+  const v = verdict(city), better = d.improvement_pct.RMSE>0, nom = better?'SARIMAX':'SARIMA';
+  $('winner').innerHTML = v.c==='tie'
+    ? `<div class="w">🤝 Statistical tie in ${city}</div><p style="margin:8px 0 0">${nom} is nominally ahead by ${Math.abs(d.improvement_pct.RMSE).toFixed(1)}% (RMSE), but the difference is <b>not statistically significant</b> (p = ${d.dm.p.toFixed(3)}), so we cannot say one is truly better.</p>`
+    : `<div class="w">🏆 ${v.t}</div><p style="margin:8px 0 0">The difference is statistically significant (p = ${d.dm.p.toFixed(3)}).</p>`;
+  if(v.c!=='tie') confetti();
+  const defs = [['MAE','MAE',3],['RMSE','RMSE',3],['MAPE','MAPE',2]];
+  $('h2h-cards').innerHTML = defs.map(([k,l,dec])=>{ const a = M.sarima.overall[k], b = M.sarimax.overall[k], imp = (a-b)/a*100, good = imp>0;
+    return `<div class="mc ${good?'good':'bad'}"><div class="t">${l}${k==='MAPE'?' (%)':''}</div><div class="num" style="color:${good?COL.green:COL.red}"><span class="cu" data-v="${Math.abs(imp)}" data-s="${good?'':'-'}">0</span>%</div>
+      <div class="t" style="margin-top:-2px">${good?'SARIMAX better':'SARIMAX worse'}</div><div class="row"><span style="color:${COL.purple}">SARIMA ${a.toFixed(dec)}</span><span style="color:${COL.green}">SARIMAX ${b.toFixed(dec)}</span></div></div>`; }).join('');
+  document.querySelectorAll('#h2h-cards .cu').forEach(el => countUp(el, +el.dataset.v, 1, '', 1100, el.dataset.s==='-'?'−':'+'));
+  const tt = d.test, ee1 = tt.actual.map((a,i)=>a-tt.sarima[i]), ee2 = tt.actual.map((a,i)=>a-tt.sarimax[i]);
+  Plotly.react('h2h-both', [
+    {x:tt.dates, y:tt.actual, type:'scatter', mode:'lines', name:'Actual', line:{color:COL.white, width:1.8}, hovertemplate:'<b>Actual</b> %{y:.2f}<extra></extra>'},
+    {x:tt.dates, y:tt.sarima, type:'scatter', mode:'lines', name:'SARIMA', line:{color:COL.purple, width:1.5}, customdata:ee1, hovertemplate:'<b>SARIMA</b> %{y:.2f} (miss %{customdata:+.2f})<extra></extra>'},
+    {x:tt.dates, y:tt.sarimax, type:'scatter', mode:'lines', name:'SARIMAX', line:{color:COL.green, width:1.5}, customdata:ee2, hovertemplate:'<b>SARIMAX</b> %{y:.2f} (miss %{customdata:+.2f})<extra></extra>'}],
+    PL({hovermode:'x unified', xaxis:ax({rangeslider:{visible:true, thickness:.07, bgcolor:TH.slider}}), yaxis:ax({title:'kWh / m² / day'}), legend:{orientation:'h', y:-0.32}, margin:{l:52,r:16,t:8,b:30}}), CFG);
+  [['bar-mae','MAE',3],['bar-mape','MAPE',2],['bar-rmse','RMSE',3]].forEach(([id,k,dec],ix)=>{
+    mk(id, {type:'bar', data:{labels:['Last yr','Last wk','SARIMA','SARIMAX'], datasets:[{data:keys.map(q=>M[q].overall[k]), backgroundColor:keys.map(q=>MCOL[q]), borderRadius:8}]},
+      options:{animation:{duration:1300, delay:c=>c.dataIndex*220+ix*120, easing:'easeOutQuart'}, plugins:{legend:{display:false}, tooltip:{callbacks:{title:t=>MNAME[keys[t[0].dataIndex]], label:t=>k+' '+t.parsed.y.toFixed(dec)}}},
+        scales:{y:{beginAtZero:true, grid:{color:GRID}}, x:{grid:{display:false}}}}}); });
+  const sn = M.seasonal_naive.overall.MAE, sx = M.sarimax.overall.MAE;
+  $('h2h-note').innerHTML = `<b>Take-away:</b> both statistical models cut the miss by about ${((sn-sx)/sn*100).toFixed(0)}% compared with "same week last year" (amber/grey bars are the simple guesses). Purple and green are nearly the same height, which is the story of this project.`;
+}
+function confetti(){
+  const cv = $('confetti'), cx = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight; const P = Array.from({length:140},()=>({x:Math.random()*cv.width, y:-20-Math.random()*cv.height*.4, vx:(Math.random()-.5)*3, vy:2+Math.random()*4, s:5+Math.random()*6, c:[COL.blue,COL.purple,COL.green,COL.amber,COL.red][Math.floor(Math.random()*5)], r:Math.random()*6}));
+  let t = 0; cancelAnimationFrame(confettiRun); (function f(){ cx.clearRect(0,0,cv.width,cv.height); P.forEach(p=>{p.x+=p.vx; p.y+=p.vy; p.r+=.15; cx.save(); cx.translate(p.x,p.y); cx.rotate(p.r); cx.fillStyle=p.c; cx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6); cx.restore();});
+    if(++t<240) confettiRun = requestAnimationFrame(f); else cx.clearRect(0,0,cv.width,cv.height); })();
+}
+
+// ------------------------------------------------------------------ CITY LAB
+function renderCities(){
+  const ks = ['seasonal_naive','sarima','sarimax'];
+  mk('ct-mae', {type:'bar', data:{labels:CITIES, datasets:ks.map(k=>({label:MNAME[k], data:CITIES.map(c=>D.city[c].metrics[k].overall.MAE), backgroundColor:MCOL[k], borderRadius:6}))},
+    options:{animation:{duration:900}, plugins:{legend:{position:'bottom'}, tooltip:{callbacks:{label:t=>`${t.dataset.label}: ${t.parsed.y.toFixed(3)}`}}}, scales:{y:{beginAtZero:true, title:{display:true,text:'MAE (kWh/m²/day)'}, grid:{color:GRID}}, x:{grid:{display:false}}}}});
+  const imp = CITIES.map(c=>D.city[c].improvement_pct.MAE);
+  mk('ct-imp', {type:'bar', data:{labels:CITIES.map(c=>D.city[c].dm.p<0.05?c+' ★':c), datasets:[{data:imp, backgroundColor:imp.map(v=>v>=0?COL.green:COL.red), borderRadius:6}]},
+    options:{indexAxis:'y', animation:{duration:900}, plugins:{legend:{display:false}, tooltip:{callbacks:{label:t=>{const c=CITIES[t.dataIndex],d=D.city[c]; return [`Error change: ${sgn(t.parsed.x)}%`, `Significance test p = ${d.dm.p.toFixed(3)}`, verdict(c).t];}}}}, scales:{x:{title:{display:true,text:'% change in MAE (positive = SARIMAX better)'}, grid:{color:GRID}}, y:{grid:{display:false}}}}});
+  const mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  Plotly.react('ct-heat', [{type:'heatmap', z:CITIES.map(c=>D.city[c].monthly_mean), x:mn, y:CITIES, colorscale:'Cividis', texttemplate:'%{z:.1f}', textfont:{size:12, color:'#fff'}, colorbar:{title:{text:'kWh/m²/day'}, thickness:10},
+    hovertemplate:'%{y}, %{x}<br>%{z:.2f} kWh/m²/day<extra></extra>', xgap:2, ygap:2}], PL({yaxis:ax({autorange:'reversed'}), xaxis:ax(), margin:{l:80,r:10,t:6,b:30}}), CFG);
+  const rows = CITIES.map(c=>{ const d = D.city[c], M = d.metrics, v = verdict(c), dim = d.monthly_mean.indexOf(Math.min(...d.monthly_mean));
+    return `<tr class="clk ${c===city?'sel':''}" onclick="setCity('${c}')"><td><b>${c}</b></td><td>${f2(d.mean)}</td><td>${f2(d.decomp.amp)}</td><td>${mn[dim]}</td><td>${f3(M.sarima.overall.MAE)}</td><td>${f3(M.sarimax.overall.MAE)}</td><td>${f2(M.sarimax.overall.MAPE)}%</td><td style="color:${d.improvement_pct.MAE>=0?COL.green:COL.red}">${sgn(d.improvement_pct.MAE)}%</td><td>${d.dm.p.toFixed(3)}</td><td><span class="badge ${v.c}">${v.t}</span></td></tr>`; }).join('');
+  $('ct-table').innerHTML = `<tr><th>City</th><th>Avg sunlight</th><th>Seasonal swing</th><th>Dimmest month</th><th>SARIMA MAE</th><th>SARIMAX MAE</th><th>SARIMAX MAPE</th><th>Change</th><th>p-value</th><th>Verdict</th></tr>` + rows;
+  const worse = CITIES.filter(c=>D.city[c].improvement_pct.MAE<0), best = CITIES.reduce((a,c)=>D.city[c].metrics.sarimax.overall.MAPE<D.city[a].metrics.sarimax.overall.MAPE?c:a, CITIES[0]);
+  $('ct-note').innerHTML = `<b>Take-away:</b> adding weather made the forecast <b>worse</b> in ${worse.length} of ${CITIES.length} cities (${worse.join(', ')||'none'}) and no city shows a significant change. The most predictable city (lowest percentage error) is <b>${best}</b>. Cities with steadier skies are easier to forecast.`;
+}
+
+// ------------------------------------------------------------------ SIMULATOR (A)
+let simTimer = null, lastSim = null;
+$('hz').oninput = () => { const w = +$('hz').value; $('hz-lbl').textContent = `${w} week${w>1?'s':''} (${w*7} days)`; };
+$('gen-btn').onclick = () => runSim(true); $('reveal').onchange = () => runSim(false);
+function runSim(animate){
+  const d = CD(), w = +$('hz').value, f = d.future, hist = 26, hx = d.dates.slice(-hist), hy = d.solar.slice(-hist), rev = $('reveal').checked && f.actual.length >= w;
+  const fx = f.dates.slice(0,w), fm = f.mean.slice(0,w), fl = f.lo.slice(0,w), fh = f.hi.slice(0,w), cx = [hx[hx.length-1], ...fx];
+  const base = [{x:hx, y:hy, type:'scatter', mode:'lines', name:'Recent actual', line:{color:COL.white, width:2}, hovertemplate:'%{x|%d %b %Y}<br>%{y:.2f}<extra>actual</extra>'}];
+  const draw = k => { const x = cx.slice(0,k+1), m = [hy[hy.length-1], ...fm].slice(0,k+1), h = [hy[hy.length-1], ...fh].slice(0,k+1), l = [hy[hy.length-1], ...fl].slice(0,k+1);
+    const tr = [...base, {x, y:h, type:'scatter', mode:'lines', line:{width:0}, showlegend:false, hoverinfo:'skip'},
+      {x, y:l, type:'scatter', mode:'lines', line:{width:0}, fill:'tonexty', fillcolor:rgba(COL.purple,.2), name:'95% range', hoverinfo:'skip'},
+      {x, y:m, type:'scatter', mode:'lines+markers', name:'SARIMA forecast', line:{color:COL.purple, width:2.6}, marker:{size:7}, hovertemplate:'%{x|%d %b %Y}<br>forecast %{y:.2f}<extra></extra>'}];
+    if(rev) tr.push({x:[hx[hx.length-1], ...f.actual_dates.slice(0,w)], y:[hy[hy.length-1], ...f.actual.slice(0,w)], type:'scatter', mode:'lines+markers', name:'What really happened', line:{color:COL.amber, width:2.2, dash:'dot'}, marker:{size:7}, hovertemplate:'%{x|%d %b %Y}<br>actual %{y:.2f}<extra></extra>'});
+    Plotly.react('sim-chart', tr, PL({xaxis:ax({range:[hx[Math.max(0,hx.length-14)], f.dates[Math.min(7,f.dates.length-1)]]}), yaxis:ax({title:'kWh / m² / day'}), legend:{orientation:'h', y:-0.22}, margin:{l:52,r:16,t:8,b:30}}), CFG); };
+  clearInterval(simTimer);
+  if(animate){ let k = 0; draw(0); simTimer = setInterval(() => { draw(++k); if(k>=w){ clearInterval(simTimer); table(); } }, 260); } else { draw(w); table(); }
+  function table(){
+    let hd = '<tr><th>Week ending</th><th>Forecast</th><th>Likely range (95%)</th>' + (rev?'<th>Actual</th><th>Miss</th>':'') + '</tr>', body = '';
+    for(let i=0;i<w;i++){ body += `<tr><td>${fx[i]}</td><td><b>${f2(fm[i])}</b></td><td>${f2(fl[i])} – ${f2(fh[i])}</td>` + (rev?`<td>${f2(f.actual[i])}</td><td style="color:${Math.abs(f.actual[i]-fm[i])<0.5?COL.green:COL.amber}">${sgn(f.actual[i]-fm[i],2)}</td>`:'') + '</tr>'; }
+    $('sim-table').innerHTML = hd + body;
+    lastSim = fx.map((x,i)=>[x, fm[i].toFixed(3), fl[i].toFixed(3), fh[i].toFixed(3), rev?f.actual[i].toFixed(3):'', rev?(f.actual[i]-fm[i]).toFixed(3):'']);
+    if(rev){ const e = fm.map((v,i)=>Math.abs(f.actual[i]-v)), inr = fm.filter((v,i)=>f.actual[i]>=fl[i]&&f.actual[i]<=fh[i]).length;
+      $('sim-note').innerHTML = `<b>Check:</b> against the weeks that really followed, the forecast missed by ${f2(e.reduce((a,b)=>a+b,0)/e.length)} on average, and the real value fell inside the range in ${inr} of ${w} weeks. The longer the horizon, the less any model can know.`; }
+    else $('sim-note').innerHTML = `<b>Note:</b> forecasts start after the last modelled week (${d.dates[d.dates.length-1]}). Tick <b>Reveal what really happened</b> to compare with the values NASA published afterwards. ${f.actual.length? '' : 'No later values are available for this city.'}`;
+  }
+}
+
+// ------------------------------------------------------------------ CHALLENGE (B)
+let ch = {idx:0, locked:false}, score = {n:0, you:0, sar:0, sax:0, beatSar:0, beatSax:0};
+$('guess').oninput = () => $('guess-r').value = $('guess').value; $('guess-r').oninput = () => $('guess').value = $('guess-r').value;
+$('nextw').onclick = newWeek; $('lock').onclick = lockIn;
+function newWeek(){
+  const t = CD().test; ch.idx = 12 + Math.floor(Math.random()*(t.dates.length-13)); ch.locked = false; $('chal-res').innerHTML = ''; $('lock').disabled = false;
+  const labs = [...t.dates.slice(ch.idx-12, ch.idx), 'next week ?'], hist = [...t.actual.slice(ch.idx-12, ch.idx), null];
+  const mid = Math.round(t.actual.slice(ch.idx-12, ch.idx).reduce((a,b)=>a+b,0)/12*20)/20; $('guess').value = mid; $('guess-r').value = mid;
+  mk('ch-chal', {type:'line', data:{labels:labs, datasets:[{label:'Last 12 weeks', data:hist, borderColor:COL.white, backgroundColor:rgba(COL.white,.08), fill:true, tension:.25, pointRadius:3, borderWidth:2.4}]},
+    options:{animation:{duration:700}, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:6}}, y:{title:{display:true,text:'kWh/m²/day'}, grid:{color:GRID}}}}});
+}
+function lockIn(){
+  if(ch.locked) return; ch.locked = true; $('lock').disabled = true;
+  const t = CD().test, i = ch.idx, g = +$('guess').value, a = t.actual[i], s1 = t.sarima[i], s2 = t.sarimax[i], e = x => Math.abs(x-a);
+  score.n++; score.you += e(g); score.sar += e(s1); score.sax += e(s2); if(e(g)<e(s1)) score.beatSar++; if(e(g)<e(s2)) score.beatSax++;
+  const c = charts['ch-chal'], pt = (v,col,lab) => ({label:lab, data:[...Array(12).fill(null), v], borderColor:col, backgroundColor:col, pointRadius:9, pointHoverRadius:11, showLine:false});
+  c.data.datasets.push(pt(a,COL.white,'Actual'), pt(g,COL.blue,'You'), pt(s1,COL.purple,'SARIMA'), pt(s2,COL.green,'SARIMAX')); c.options.plugins.legend = {display:true, position:'bottom'}; c.update();
+  const rows = [['Actual',a,null,COL.white],['You',g,e(g),COL.blue],['SARIMA',s1,e(s1),COL.purple],['SARIMAX',s2,e(s2),COL.green]];
+  const closest = rows.slice(1).reduce((x,y)=>y[2]<x[2]?y:x);
+  $('chal-res').innerHTML = `<div class="glass" style="margin-top:10px"><b>Week ending ${t.dates[i]}</b><table><tr><th></th><th>Value</th><th>Miss</th></tr>${rows.map(r=>`<tr><td style="color:${r[3]}"><b>${r[0]}</b></td><td>${f2(r[1])}</td><td>${r[2]===null?'–':f2(r[2])}</td></tr>`).join('')}</table>
+    <p style="margin:8px 0 0"><b>${closest[0]==='You'?'🎉 You were closest!':'Closest: '+closest[0]}</b></p>
+    <p class="sub" style="margin:4px 0 0">Scoreboard after ${score.n} round${score.n>1?'s':''}: your average miss ${f2(score.you/score.n)} · SARIMA ${f2(score.sar/score.n)} · SARIMAX ${f2(score.sax/score.n)}. You beat SARIMAX in ${score.beatSax} of ${score.n}.</p></div>`;
+}
+
+// ------------------------------------------------------------------ RESULTS
+function renderResults(){
+  const d = CD(), M = d.metrics, v = verdict(city), keys = ['seasonal_naive','sarima','sarimax'];
+  $('res-lead').innerHTML = `Everything below is for <b>${city}</b> (${d.n_test} test weeks, ${d.test_range[0]} → ${d.test_range[1]}). Change city at the top to compare.`;
+  const nomBest = M.sarimax.overall.RMSE < M.sarima.overall.RMSE ? 'sarimax' : 'sarima';
+  $('price').innerHTML = keys.map(k=>{ const m = M[k].overall, acc = Math.max(0, 100-m.MAPE), best = k===nomBest;
+    return `<div class="pc ${best?'best':''}">${best?'<div class="ribbon">'+(v.c==='tie'?'nominally best':'best')+'</div>':''}<h4 style="color:${MCOL[k]}">${MNAME[k]}</h4>
+      <div class="mape" style="color:${MCOL[k]}">${m.MAPE.toFixed(2)}%</div><div class="sub">average error (MAPE)</div>
+      <div class="sub" style="margin:8px 0 0">Accuracy score ${acc.toFixed(1)} / 100</div><div class="bar"><i data-w="${acc}" style="background:${MCOL[k]}"></i></div>
+      <div class="sub" style="margin:0">MAE ${m.MAE.toFixed(3)} · RMSE ${m.RMSE.toFixed(3)}</div>
+      <div class="sub" style="margin:0">Monsoon weeks MAE ${M[k].monsoon.MAE.toFixed(3)} · other weeks ${M[k].other.MAE.toFixed(3)}</div></div>`; }).join('');
+  setTimeout(() => document.querySelectorAll('#price .bar i').forEach(b => b.style.width = b.dataset.w + '%'), 80);
+  $('fl1').innerHTML = `<p style="margin:0">${GAP.gap.split('.')[0]}.</p>`;
+  $('fl2').innerHTML = `<p style="margin:0">SARIMAX: the same SARIMA model plus last week's humidity, temperature and cloud, tested on ${d.n_test} unseen weeks in five cities.</p>`;
+  $('fl3').innerHTML = `<p style="margin:0"><b>${v.c==='tie'?'No significant gain':v.t}.</b> Error changed by ${sgn(d.improvement_pct.MAE)}% (p = ${d.dm.p.toFixed(2)}). ${d.sarimax_model.coef.cloud_lag1.p<0.05 ? ("Last week\u0027s cloud cover does carry a real signal here (p = "+d.sarimax_model.coef.cloud_lag1.p.toFixed(3)+"), but it is too small to improve forecasts noticeably.") : ("None of the three weather inputs is individually significant in this city (cloud p = "+d.sarimax_model.coef.cloud_lag1.p.toFixed(2)+").")}</p>`;
+}
+const IDEAS = [['📅','Go daily + real weather forecasts','Move from weekly to daily data with Fourier seasonal terms, and use weather forecasts instead of last week\'s observations. This is where weather is most likely to help.'],
+  ['🏙️','Model all five cities together','A pooled or hierarchical model could share information across climate zones and use rolling-origin testing instead of one split.'],
+  ['🧠','Compare with LSTM and boosting + probabilities','Run an LSTM and gradient boosting on the same lagged features and score the forecast ranges (CRPS, coverage), not just the single numbers.']];
+$('ideas').innerHTML = IDEAS.map(i=>`<div class="glass idea" onclick="this.classList.toggle('open')"><div style="font-size:30px">${i[0]}</div><b>${i[1]}</b><div class="more">${i[2]}</div><div class="sub" style="margin-top:6px">click to expand</div></div>`).join('');
+
+// ------------------------------------------------------------------ boot
+// ------------------------------------------------------------------ CSV helpers
+const csvEsc = v => { const t = (v===null||v===undefined) ? '' : String(v); return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; };
+const toCSV = (head, rows) => [head, ...rows].map(r => r.map(csvEsc).join(',')).join('\n');
+function saveText(name, text, msgEl){
+  try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:'text/csv'})); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); msgEl.textContent = 'Download started: ' + name + ' (nothing arrived? Use Copy CSV)'; }
+  catch(e){ msgEl.textContent = 'Downloads are blocked here. Use Copy CSV.'; }
+}
+async function copyText(text, msgEl){
+  try { await navigator.clipboard.writeText(text); msgEl.textContent = 'Copied to the clipboard'; }
+  catch(e){ const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); let ok = false;
+    try { ok = document.execCommand('copy'); } catch(_){} ta.remove(); msgEl.textContent = ok ? 'Copied to the clipboard' : 'Copy was blocked by the browser.'; }
+}
+const testCSV = () => { const t = CD().test; return toCSV(['week_ending','actual','sarima','sarima_lo95','sarima_hi95','sarimax','sarimax_lo95','sarimax_hi95','seasonal_naive','naive'],
+  t.dates.map((x,i)=>[x,t.actual[i],t.sarima[i],t.sarima_lo[i],t.sarima_hi[i],t.sarimax[i],t.sarimax_lo[i],t.sarimax_hi[i],t.seasonal_naive[i],t.naive[i]])); };
+const rawCSV = () => { const d = CD(), r = RAW[city]; return toCSV(['week_ending','period','solar_irradiance_kwh_m2_day','temperature_c','humidity_pct','cloud_cover_pct'],
+  d.dates.map((x,i)=>[x, i<d.n_train?'train':'test', d.solar[i], r.t[i], r.rh[i], r.c[i]])); };
+const simCSV = () => lastSim ? toCSV(['week_ending','forecast','low95','high95','actual','miss'], lastSim) : '';
+$('dl-test').onclick = () => saveText(city + '_test_forecasts.csv', testCSV(), $('dl-test-msg')); $('cp-test').onclick = () => copyText(testCSV(), $('dl-test-msg'));
+$('dl-raw').onclick = () => saveText(city + '_weekly_nasa_power.csv', rawCSV(), $('ds-msg')); $('cp-raw').onclick = () => copyText(rawCSV(), $('ds-msg'));
+$('dl-sim').onclick = () => lastSim ? saveText(city + '_forecast_simulator.csv', simCSV(), $('sim-msg')) : ($('sim-msg').textContent = 'Generate a forecast first.');
+$('cp-sim').onclick = () => lastSim ? copyText(simCSV(), $('sim-msg')) : ($('sim-msg').textContent = 'Generate a forecast first.');
+
+// ------------------------------------------------------------------ DATASET section
+const LATLON = {Bengaluru:'12.97°N, 77.59°E', Delhi:'28.61°N, 77.21°E', Mumbai:'19.08°N, 72.88°E', Chennai:'13.08°N, 80.27°E', Jodhpur:'26.24°N, 73.02°E'};
+$('ds-period').onchange = () => renderDataset();
+function renderDataset(){
+  const d = CD(), r = RAW[city], n = d.dates.length, per = $('ds-period').value;
+  $('ds-city').textContent = city; $('ds-ll').textContent = LATLON[city];
+  const cols = [['Solar irradiance','kWh/m²/day', d.solar, 2], ['Temperature','°C', r.t, 1], ['Humidity','%', r.rh, 1], ['Cloud cover','%', r.c, 1]];
+  const st = a => { const m = a.reduce((x,y)=>x+y,0)/a.length; return {min:Math.min(...a), max:Math.max(...a), mean:m, sd:Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/(a.length-1))}; };
+  $('ds-stats').innerHTML = cols.map(([nm,u,a,dec]) => { const q = st(a); return `<div class="glass ds-stat"><div class="t"><b style="color:var(--ink)">${nm}</b> · ${u}</div>
+    <div class="r"><span>min</span><b>${q.min.toFixed(dec)}</b></div><div class="r"><span>max</span><b>${q.max.toFixed(dec)}</b></div><div class="r"><span>mean</span><b>${q.mean.toFixed(dec)}</b></div><div class="r"><span>std. dev.</span><b>${q.sd.toFixed(dec)}</b></div></div>`; }).join('');
+  const lo = per==='test' ? d.n_train : 0, hi = per==='train' ? d.n_train : n; let h = '';
+  for(let i=lo;i<hi;i++) h += `<tr class="${i>=d.n_train?'tst':''}"><td>${d.dates[i]}</td><td>${d.solar[i].toFixed(2)}</td><td>${r.t[i].toFixed(1)}</td><td>${r.rh[i].toFixed(1)}</td><td>${r.c[i].toFixed(1)}</td></tr>`;
+  $('ds-body').innerHTML = h; $('ds-count').textContent = `${hi-lo} weekly rows shown for ${city} (all ${n} weeks: ${d.dates[0]} to ${d.dates[n-1]}).`;
+}
+
+// ------------------------------------------------------------------ THEME (dark default, light on request)
+function applyTheme(t, rerender){
+  const L = t === 'light'; document.documentElement.setAttribute('data-skin', t);
+  Object.assign(COL, L ? COL_LIGHT : COL_DARK);
+  MCOL.sarima = COL.purple; MCOL.sarimax = COL.green; MCOL.seasonal_naive = COL.amber; MCOL.naive = COL.grey;
+  GRID = L ? 'rgba(25,35,80,.10)' : 'rgba(255,255,255,.07)';
+  Object.assign(TH, L ? {font:'#2c3659', hoverbg:'#ffffff', hoverborder:'#c3cbe6', hoverfont:'#141a33', line:'rgba(25,35,80,.25)', surf:'#f2f4fb', zero:'#141a33', slider:'rgba(25,35,80,.05)'}
+                      : {font:'#cbd5e1', hoverbg:'#14142b', hoverborder:'#445', hoverfont:'#fff', line:'rgba(255,255,255,.15)', surf:'#0a0a1a', zero:'#fff', slider:'rgba(255,255,255,.04)'});
+  Chart.defaults.color = TH.font; Chart.defaults.borderColor = GRID;
+  $('themebtn').textContent = L ? 'Dark mode' : 'Light mode';
+  try { localStorage.setItem('solar-theme', t); } catch(e) {}
+  if(rerender){ drawTS(); drawLSTM(); updateAll(); }
+}
+$('themebtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-skin') === 'light' ? 'dark' : 'light', true);
+
+// ------------------------------------------------------------------ scroll-spy for the top navigation
+const spyLinks = [...document.querySelectorAll('nav.top .links a')];
+const spy = new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting) spyLinks.forEach(a => a.classList.toggle('act', a.getAttribute('href') === '#' + e.target.id)); }), {rootMargin:'-45% 0px -50% 0px'});
+['hero','concepts','explorer','lab','cities','sim','results','dataset'].forEach(id => { const el = $(id); if(el) spy.observe(el); });
+
+// ------------------------------------------------------------------ boot
+function flash(){ document.querySelectorAll('.plot, canvas:not(#confetti)').forEach(el => { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }); }
+function updateAll(){ flash(); renderHero(); renderExplorer(); renderLab(); renderCities(); renderResults(); renderStat(); renderDiff(); runSim(false); newWeek(); renderDataset(); }
+let savedTheme = null; try { savedTheme = localStorage.getItem('solar-theme'); } catch(e) {}
+applyTheme(savedTheme === 'light' ? 'light' : 'dark', false);
+drawTS(); drawLSTM(); updateAll();
+window.addEventListener('resize', () => { ['ex-main','ml-main','ml-heat','ml-hist','ct-heat','sim-chart'].forEach(id => { const e = $(id); if(e && e.offsetParent) Plotly.Plots.resize(e); }); });
+</script>
+</body>
+</html>
